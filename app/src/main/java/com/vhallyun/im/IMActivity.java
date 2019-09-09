@@ -6,20 +6,30 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Patterns;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
+import com.google.gson.Gson;
 import com.vhall.framework.connect.VhallConnectService;
 import com.vhall.ims.VHIM;
+import com.vhall.ims.VHIMApi;
 import com.vhall.message.ConnectServer;
+import com.vhallyun.im.model.ChannelDataModel;
+import com.vhallyun.im.model.UserInfo;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -36,12 +46,17 @@ import okhttp3.Response;
  */
 public class IMActivity extends Activity {
 
+    private static final String TAG = "IMActivity";
     private String mChannelId = "";
     private String mAccessToken = "";
     private LinearLayout ll_content;
     private EditText et;
+    private Switch swSet;
+    private MemberPop memberPop;
+    private Gson gson = new Gson();
+    private ChannelDataModel channelData;
     VHIM im;
-    private OkHttpClient mClient;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +68,9 @@ public class IMActivity extends Activity {
         ll_content = this.findViewById(R.id.ll_content);
         et = this.findViewById(R.id.et);
         et.setOnEditorActionListener(new EditListener());
+        swSet = findViewById(R.id.sw_set_channel);
+
+
         im = new VHIM(mChannelId, mAccessToken);
         im.setOnMessageListener(new MsgListener());
         im.setOnConnectChangedListener(new VhallConnectService.OnConnectStateChangedListener() {
@@ -77,13 +95,58 @@ public class IMActivity extends Activity {
             }
         });
         im.join();
+
+        swSet.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (swSet.isChecked()) {
+                    im.setChannelMsg(VHIM.TYPE_DISABLE_ALL, "", sendCallback);
+                } else {
+                    im.setChannelMsg(VHIM.TYPE_PERMIT_ALL, "", sendCallback);
+                }
+            }
+        });
     }
+
+    private VHIM.Callback sendCallback = new VHIM.Callback() {
+        @Override
+        public void onSuccess() {
+
+        }
+
+        @Override
+        public void onFailure(int errorCode, String errorMsg) {
+            Toast.makeText(IMActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
+        }
+    };
 
     @Override
     protected void onDestroy() {
         im.leave();
         im = null;
         super.onDestroy();
+    }
+
+    public void showMember(final View view) {
+        im.getUserList(1, 20, new VHIM.ResultCallback() {
+            @Override
+            public void onFailure(int errorCode, String errorMsg) {
+                Toast.makeText(IMActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onSuccess(String data) {
+                Log.e(TAG, "onSuccess: " + data);
+                channelData = gson.fromJson(data, ChannelDataModel.class);
+                channelData.resetList();
+                if (memberPop == null) {
+                    memberPop = new MemberPop(IMActivity.this, channelData, im);
+                } else {
+                    memberPop.updateData(channelData);
+                }
+                memberPop.showAtLocation(view, Gravity.CENTER, 0, 0);
+            }
+        });
     }
 
     class EditListener implements TextView.OnEditorActionListener {
@@ -99,7 +162,7 @@ public class IMActivity extends Activity {
                     @Override
                     public void onFailure(int errorCode, String errorMsg) {
                         Log.e("imact", "errorCode:" + errorCode + "&errorMsg:" + errorMsg);
-                        Toast.makeText(IMActivity.this,errorMsg, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(IMActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -117,43 +180,88 @@ public class IMActivity extends Activity {
                 if (TextUtils.isEmpty(service_type)) return; //
                 String sender_id = text.optString("sender_id");
                 String time = text.optString("date_time");
-                String context = text.optString("context");
                 String dataStr = text.optString("data");
-                if (service_type.equals(VHIM.TYPE_CUSTOM)) {//自定义消息处理
+                if (TextUtils.isEmpty(service_type)) {
+                    Log.e(TAG, "onMessage: " + msg);
+                } else if (service_type.equals(VHIM.TYPE_CUSTOM)) {//自定义消息处理
                     addView(service_type, "", dataStr, time, "");
                 } else {
                     JSONObject data = new JSONObject(dataStr);
-                    JSONObject contextObj = new JSONObject(context);
-                    String nickName = contextObj.optString("nick_name");
-                    if(TextUtils.isEmpty(nickName)){
+                    String context = text.optString("context");
+                    String nickName, avatar = "";
+                    if (!TextUtils.isEmpty(context)) {
+                        JSONObject contextObj = new JSONObject(context);
+                        nickName = contextObj.optString("nick_name");
+                        avatar = contextObj.optString("avatar");
+                        if (TextUtils.isEmpty(nickName)) {
+                            nickName = sender_id;
+                        }
+                    } else {
                         nickName = sender_id;
                     }
-                    String avatar = contextObj.optString("avatar");
                     String textContent = data.optString("text_content");
                     String type = data.optString("type");
-                    int onlineNum = text.optInt("uv");
-//                Toast.makeText(IMActivity.this, " 当前在线人数 ： " + onlineNum, Toast.LENGTH_SHORT).show();
-                    if (service_type.equals(VHIM.TYPE_ONLINE)) {
-                        addView(type, nickName, textContent, time, avatar);
-                    } else {
-                        addView(service_type, nickName, textContent, time, avatar);
+                    String targetId = data.optString("target_id");
+                    if (!TextUtils.isEmpty(targetId)) {
+                        nickName = targetId;
                     }
+                    int onlineNum = text.optInt("uv");
+                    if (type.equals(VHIM.TYPE_JOIN)) {
+                        //上线消息
+                        if (memberPop != null) {
+                            memberPop.userJoin(sender_id);
+                        }
+                    } else if (type.equals(VHIM.TYPE_LEAVE)) {
+                        //下线消息
+                        if (memberPop != null) {
+                            memberPop.userLeave(sender_id);
+                        }
+                    } else if (type.equals(VHIM.TYPE_DISABLE)) {
+                        //禁言某个用户消息
+                        if (memberPop != null) {
+                            memberPop.userDisable(targetId);
+                        }
+                    } else if (type.equals(VHIM.TYPE_DISABLE_ALL)) {
+                        //全员禁言消息
+                        swSet.setChecked(true);
+                    } else if (type.equals(VHIM.TYPE_PERMIT)) {
+                        //取消某用户禁言
+                        if (memberPop != null) {
+                            memberPop.userPermit(targetId);
+                        }
+                    } else if (type.equals(VHIM.TYPE_PERMIT_ALL)) {
+                        //取消全员禁言
+                        swSet.setChecked(false);
+                    }
+                    addView(type, nickName, textContent, time, avatar);
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
             }
         }
+
+        @Override
+        public void onChannelStatus(String msg) {
+            try {
+                JSONObject obj = new JSONObject(msg);
+                int channelDisable = obj.optJSONObject("data").optInt("channel_disable");
+                if (channelDisable == 1) {
+                    swSet.setChecked(true);
+                } else {
+                    swSet.setChecked(false);
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+        }
     }
 
     private void addView(String event, String nick_name, String data, String time, String avatar) {
         View view = View.inflate(IMActivity.this, R.layout.im_item_layout, null);
-        ImageView v = view.findViewById(R.id.avatar);
         if (ll_content.getChildCount() >= 10) {
             View removeView = ll_content.getChildAt(0);
             ll_content.removeView(removeView);
-        }
-        if (!TextUtils.isEmpty(avatar) && !avatar.equals("null")) {
-            requestAvatar(avatar, v);
         }
         TextView c = view.findViewById(R.id.content);
         TextView t = view.findViewById(R.id.time);
@@ -163,40 +271,25 @@ public class IMActivity extends Activity {
             c.setText(nick_name + ": 上线了");
         } else if (event.equals(VHIM.TYPE_LEAVE)) {
             c.setText(nick_name + ": 下线了");
+        } else if (event.equals(VHIM.TYPE_DISABLE_ALL)) {
+            c.setText("全体禁言");
+        } else if (event.equals(VHIM.TYPE_PERMIT_ALL)) {
+            c.setText("取消全体禁言");
+        } else if (event.equals(VHIM.TYPE_DISABLE)) {
+            c.setText(nick_name + ": 被禁言");
+        } else if (event.equals(VHIM.TYPE_PERMIT)) {
+            c.setText(nick_name + ": 已取消禁言");
         } else {
             c.setText(nick_name + ": " + data);
+            ImageView v = view.findViewById(R.id.avatar);
+            if (!TextUtils.isEmpty(avatar) && !avatar.equals("null")) {
+                Glide.with(this)
+                        .load(avatar)
+                        .into(v);
+            }
+            v.setVisibility(View.VISIBLE);
         }
         t.setText(time);
         ll_content.addView(view);
-    }
-
-    private void requestAvatar(String url, final ImageView view) {
-        if (url.startsWith("//")) {
-            url = "http:" + url;
-        }
-        if (!Patterns.WEB_URL.matcher(url).matches()) {
-            return;
-        }
-        Request request = new Request.Builder().url(url).build();
-        if (mClient == null)
-            mClient = new OkHttpClient();
-        Call call = mClient.newCall(request);
-        call.enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                final byte[] picture = response.body().bytes();
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        view.setImageBitmap(BitmapFactory.decodeByteArray(picture, 0, picture.length));
-                    }
-                });
-            }
-        });
     }
 }
