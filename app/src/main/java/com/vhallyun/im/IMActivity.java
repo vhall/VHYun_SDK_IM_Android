@@ -1,18 +1,14 @@
 package com.vhallyun.im;
 
 import android.app.Activity;
-import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
-import android.util.Patterns;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
-import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -24,22 +20,13 @@ import com.bumptech.glide.Glide;
 import com.google.gson.Gson;
 import com.vhall.framework.connect.VhallConnectService;
 import com.vhall.ims.VHIM;
-import com.vhall.ims.VHIMApi;
 import com.vhall.message.ConnectServer;
 import com.vhallyun.im.model.ChannelDataModel;
-import com.vhallyun.im.model.UserInfo;
+import com.vhallyun.im.widget.ChangeUserInfoDialog;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * Created by Hank on 2017/12/20.
@@ -56,6 +43,9 @@ public class IMActivity extends Activity {
     private Gson gson = new Gson();
     private ChannelDataModel channelData;
     VHIM im;
+
+    private ChangeUserInfoDialog dialog;
+
 
 
     @Override
@@ -87,7 +77,6 @@ public class IMActivity extends Activity {
                             break;
                         case STATE_CONNECTED:
                             text = "连接成功！";
-
                             break;
                     }
                     Toast.makeText(IMActivity.this, "网络：" + text, Toast.LENGTH_SHORT).show();
@@ -119,6 +108,13 @@ public class IMActivity extends Activity {
             Toast.makeText(IMActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
         }
     };
+
+    public void updateUserInfo(View view) {
+        if(dialog == null){
+            dialog = new ChangeUserInfoDialog(this);
+        }
+        dialog.show();
+    }
 
     @Override
     protected void onDestroy() {
