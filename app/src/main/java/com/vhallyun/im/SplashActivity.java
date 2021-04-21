@@ -26,7 +26,7 @@ public class SplashActivity extends AppCompatActivity {
     private static final int REQUEST_READ_PHONE_STATE = 0;
     EditText mEditAppid;
     EditText mEditUserid;
-    TextView tvPackageName, tvSignatures;
+    TextView tvPackageName, tvSignatures,display;
 
 
     @Override
@@ -38,11 +38,13 @@ public class SplashActivity extends AppCompatActivity {
         mEditAppid.setText("");
         mEditUserid.setText(Build.MODEL);//String.valueOf(System.currentTimeMillis())
         tvPackageName = findViewById(R.id.tv_package_name);
+        display = findViewById(R.id.display);
         tvPackageName.setText(getPackageName());
         tvSignatures = findViewById(R.id.tv_signatures);
-        tvSignatures.setText(SignatureUtil.getSignatureSHA1(this));
+        tvSignatures.setText(SignatureUtil.getSignatureSHA1(this,getPackageName()));
         getPermission();
 
+        display.setText(String.format("version: %s",BuildConfig.VERSION_NAME));
     }
 
     //初始化SDK需要读取手机信息做信息统计，如果取不到权限，信息为空，不影响SDK使用

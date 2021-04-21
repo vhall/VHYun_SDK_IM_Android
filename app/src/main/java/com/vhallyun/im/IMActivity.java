@@ -20,6 +20,8 @@ import com.bumptech.glide.Glide;
 import com.google.gson.Gson;
 import com.vhall.framework.connect.VhallConnectService;
 import com.vhall.ims.VHIM;
+import com.vhall.ims.message.IBody;
+import com.vhall.ims.message.IVHMessage;
 import com.vhall.message.ConnectServer;
 import com.vhallyun.im.model.ChannelDataModel;
 import com.vhallyun.im.widget.ChangeUserInfoDialog;
@@ -149,7 +151,14 @@ public class IMActivity extends Activity {
         @Override
         public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
             if (actionId == EditorInfo.IME_ACTION_SEND) {
-                im.sendMsg(v.getText().toString(), new VHIM.Callback() {
+                IBody body = new IBody.Builder()
+                        .setTextContent(v.getText().toString())
+                        .build();
+                IVHMessage message = new IVHMessage.Builder()
+                        .setNoAudit("1")
+                        .setIBody(body)
+                        .build();
+                im.sendMsg(message, new VHIM.Callback() {
                     @Override
                     public void onSuccess() {
                         Log.i("IMACt", "success");
@@ -161,6 +170,18 @@ public class IMActivity extends Activity {
                         Toast.makeText(IMActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
                     }
                 });
+//                im.sendMsg(v.getText().toString(), new VHIM.Callback() {
+//                    @Override
+//                    public void onSuccess() {
+//                        Log.i("IMACt", "success");
+//                    }
+//
+//                    @Override
+//                    public void onFailure(int errorCode, String errorMsg) {
+//                        Log.e("imact", "errorCode:" + errorCode + "&errorMsg:" + errorMsg);
+//                        Toast.makeText(IMActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
+//                    }
+//                });
             }
             return true;
         }
